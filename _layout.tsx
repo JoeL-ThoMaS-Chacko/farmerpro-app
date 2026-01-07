@@ -1,9 +1,14 @@
 import { Stack } from "expo-router";
+import 'react-native-gesture-handler';
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 
 export default function RootLayout() {
-  return  ( <Stack screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="index" />  {/* This is your HomeScreen */}
-      <Stack.Screen name="croppred" />  {/* This is your CropPredictionScreen */}
-    </Stack>
+  return (
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <Stack screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="index" />
+        <Stack.Screen name="croppred" />
+      </Stack>
+    </GestureHandlerRootView>
   );
 }
