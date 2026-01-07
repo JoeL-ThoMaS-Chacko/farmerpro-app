@@ -1,20 +1,20 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useNavigation, useRoute } from '@react-navigation/native';
+import { router, useLocalSearchParams } from 'expo-router';
 import { ArrowLeft, History, Trash2 } from 'lucide-react-native';
 import React, { useEffect, useState } from 'react';
 import {
-    ActivityIndicator,
-    Alert,
-    Image,
-    KeyboardAvoidingView,
-    Modal,
-    Platform,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Alert,
+  Image,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { GestureHandlerRootView, Swipeable } from 'react-native-gesture-handler';
 
@@ -40,6 +40,13 @@ interface CropPrediction {
   inputData?: CropData;
 }
 
+// Mean values for NPK when user doesn't provide them
+const MEAN_VALUES = {
+  N: 100,  // Mean nitrogen value
+  P: 40,  // Mean phosphorus value
+  K: 50,  // Mean potassium value
+};
+
 // Crop information database
 const CROP_INFO: { [key: string]: { description: string; imageUrl: string; season: string; water: string; soil: string } } = {
   'rice': {
@@ -63,26 +70,12 @@ const CROP_INFO: { [key: string]: { description: string; imageUrl: string; seaso
     water: 'High (1200-2200 mm)',
     soil: 'Rich loamy soil'
   },
-  'wheat': {
-    description: 'Wheat grows best in cool, dry climates with well-drained fertile soil. It requires moderate rainfall and cool temperatures during growing season.',
-    imageUrl: 'https://images.unsplash.com/photo-1574323347407-f5e1ad6d020b?w=400&h=300&fit=crop',
-    season: 'October - March (Rabi)',
-    water: 'Moderate (450-650 mm)',
-    soil: 'Well-drained loam'
-  },
   'maize': {
     description: 'Maize requires warm weather, fertile well-drained soil rich in organic matter, and adequate moisture during the growing period.',
     imageUrl: 'https://images.unsplash.com/photo-1551754655-cd27e38d2076?w=400&h=300&fit=crop',
     season: 'June - September (Kharif)',
     water: 'Moderate (500-800 mm)',
     soil: 'Sandy loam to clay loam'
-  },
-  'sugarcane': {
-    description: 'Sugarcane thrives in tropical climate with high temperature, abundant sunshine, and plenty of water. Requires well-drained fertile soil.',
-    imageUrl: 'https://images.unsplash.com/photo-1591020100-3b7566f8c1e6?w=400&h=300&fit=crop',
-    season: 'Year-round',
-    water: 'High (1500-2500 mm)',
-    soil: 'Deep loamy soil'
   },
   'cotton': {
     description: 'Cotton requires warm climate, moderate rainfall, and black cotton soil. Needs at least 200 frost-free days for optimal growth.',
@@ -91,30 +84,122 @@ const CROP_INFO: { [key: string]: { description: string; imageUrl: string; seaso
     water: 'Moderate (600-1200 mm)',
     soil: 'Black cotton soil'
   },
-  'groundnut': {
-    description: 'Groundnut grows well in warm climate with light sandy loam soil. It requires moderate rainfall and good drainage.',
-    imageUrl: 'https://images.unsplash.com/photo-1608797178974-15b35a64ede9?w=400&h=300&fit=crop',
-    season: 'June - September',
+  'blackgram': {
+    description: 'Black gram is a protein-rich pulse crop that grows well in warm climates. It requires well-drained loamy soil and moderate rainfall.',
+    imageUrl: 'https://images.unsplash.com/photo-1589367920969-ab8e050bbb04?w=400&h=300&fit=crop',
+    season: 'July - October (Kharif)',
+    water: 'Low to Moderate (400-600 mm)',
+    soil: 'Loamy to clay loam'
+  },
+  'chickpea': {
+    description: 'Chickpea is a cool-season crop requiring moderate temperatures. It thrives in well-drained soils and is drought-tolerant.',
+    imageUrl: 'https://images.unsplash.com/photo-1610940280769-0938be9a77e9?w=400&h=300&fit=crop',
+    season: 'October - March (Rabi)',
+    water: 'Low (300-500 mm)',
+    soil: 'Well-drained loamy soil'
+  },
+  'coffee': {
+    description: 'Coffee grows in tropical highlands with cool temperatures, high humidity, and rich volcanic soil. Requires shade and consistent rainfall.',
+    imageUrl: 'https://images.unsplash.com/photo-1447933601403-0c6688de566e?w=400&h=300&fit=crop',
+    season: 'Year-round',
+    water: 'High (1500-2500 mm)',
+    soil: 'Rich, well-drained volcanic soil'
+  },
+  'jute': {
+    description: 'Jute is a fiber crop that requires warm, humid climate with heavy rainfall. It grows best in alluvial soil of river deltas.',
+    imageUrl: 'https://images.unsplash.com/photo-1597306691829-9c0b5b5c6b3e?w=400&h=300&fit=crop',
+    season: 'March - July (Kharif)',
+    water: 'High (1500-2000 mm)',
+    soil: 'Alluvial sandy loam'
+  },
+  'kidneybeans': {
+    description: 'Kidney beans are nutritious legumes that prefer cool climates. They need well-drained soil and moderate water during growing season.',
+    imageUrl: 'https://images.unsplash.com/photo-1583523032162-e7f2b8b8c3f1?w=400&h=300&fit=crop',
+    season: 'June - October',
     water: 'Moderate (500-700 mm)',
+    soil: 'Well-drained loamy soil'
+  },
+  'lentil': {
+    description: 'Lentil is a cool-season pulse crop that requires moderate temperatures. It is drought-tolerant and grows in various soil types.',
+    imageUrl: 'https://images.unsplash.com/photo-1599909533005-b38f8825e0cd?w=400&h=300&fit=crop',
+    season: 'October - March (Rabi)',
+    water: 'Low to Moderate (300-500 mm)',
+    soil: 'Loamy to clay loam'
+  },
+  'mango': {
+    description: 'Mango trees thrive in tropical and subtropical climates with distinct wet and dry seasons. Requires deep, well-drained soil.',
+    imageUrl: 'https://images.unsplash.com/photo-1553279768-865429fa0078?w=400&h=300&fit=crop',
+    season: 'Year-round (Fruiting: Feb-June)',
+    water: 'Moderate (700-1200 mm)',
+    soil: 'Deep, well-drained loamy soil'
+  },
+  'mothbeans': {
+    description: 'Moth beans are drought-resistant legumes suitable for arid regions. They grow well in sandy soils with minimal water requirements.',
+    imageUrl: 'https://images.unsplash.com/photo-1589367920969-ab8e050bbb04?w=400&h=300&fit=crop',
+    season: 'July - October',
+    water: 'Very Low (300-400 mm)',
     soil: 'Sandy loam'
   },
-  'default': {
-    description: 'This crop is suitable for your soil and climate conditions. Consult local agricultural experts for detailed cultivation practices.',
-    imageUrl: 'https://images.unsplash.com/photo-1625246333195-78d9c38ad449?w=400&h=300&fit=crop',
-    season: 'Varies',
-    water: 'Varies',
-    soil: 'Varies'
+  'mungbean': {
+    description: 'Mung beans are versatile legumes that grow in warm climates. They prefer well-drained soil and have short growing periods.',
+    imageUrl: 'https://images.unsplash.com/photo-1596797882870-8c33deeac224?w=400&h=300&fit=crop',
+    season: 'June - September (Kharif)',
+    water: 'Moderate (400-600 mm)',
+    soil: 'Well-drained sandy loam'
+  },
+  'muskmelon': {
+    description: 'Muskmelon requires warm temperatures, plenty of sunshine, and well-drained sandy soil. It needs consistent moisture during fruit development.',
+    imageUrl: 'https://images.unsplash.com/photo-1563114773-84221bd62daa?w=400&h=300&fit=crop',
+    season: 'February - June (Summer)',
+    water: 'Moderate (400-600 mm)',
+    soil: 'Sandy loam'
+  },
+  'orange': {
+    description: 'Orange trees thrive in subtropical climates with warm temperatures. They require well-drained soil and consistent moisture.',
+    imageUrl: 'https://images.unsplash.com/photo-1580052614034-c55d20bfee3b?w=400&h=300&fit=crop',
+    season: 'Year-round',
+    water: 'Moderate (1000-1500 mm)',
+    soil: 'Well-drained sandy loam'
+  },
+  'papaya': {
+    description: 'Papaya grows best in tropical climates with warm temperatures year-round. It requires well-drained, fertile soil rich in organic matter.',
+    imageUrl: 'https://images.unsplash.com/photo-1526318896980-cf78c088247c?w=400&h=300&fit=crop',
+    season: 'Year-round',
+    water: 'High (1200-1800 mm)',
+    soil: 'Well-drained loamy soil'
+  },
+  'pigeonpeas': {
+    description: 'Pigeon peas are drought-tolerant legumes suitable for semi-arid regions. They improve soil fertility and grow in various soil types.',
+    imageUrl: 'https://images.unsplash.com/photo-1589367920969-ab8e050bbb04?w=400&h=300&fit=crop',
+    season: 'June - December (Kharif)',
+    water: 'Low to Moderate (500-700 mm)',
+    soil: 'Well-drained loamy soil'
+  },
+  'pomegranate': {
+    description: 'Pomegranate grows in semi-arid climates with hot summers. It is drought-tolerant and prefers well-drained soil with good sunlight.',
+    imageUrl: 'https://images.unsplash.com/photo-1615485925763-4f08b4d96b0f?w=400&h=300&fit=crop',
+    season: 'Year-round (Fruiting: Sept-Feb)',
+    water: 'Low to Moderate (500-800 mm)',
+    soil: 'Well-drained sandy loam'
+  },
+  'watermelon': {
+    description: 'Watermelon requires hot temperatures, plenty of sunshine, and sandy loam soil. It needs consistent moisture during growth and fruit development.',
+    imageUrl: 'https://images.unsplash.com/photo-1587049352846-4a222e784538?w=400&h=300&fit=crop',
+    season: 'February - June (Summer)',
+    water: 'Moderate (500-700 mm)',
+    soil: 'Sandy loam'
   }
 };
 
 const CropPredictionScreen: React.FC = () => {
-  const navigation = useNavigation();
-  const route = useRoute();
+  // Get params using Expo Router's hook
+  const params = useLocalSearchParams();
   
-  const weatherData = route.params?.weather || {
-    temperature: 28,
-    humidity: 75,
-    rainfall: 2500
+  const weatherData = {
+    temperature: params.temperature ? Number(params.temperature) : 28,
+    humidity: params.humidity ? Number(params.humidity) : 75,
+    rainfall: params.rainfall ? Number(params.rainfall) : 2500,
+    district: params.district || 'Unknown'
   };
 
   const [formData, setFormData] = useState<CropData>({
@@ -175,18 +260,32 @@ const CropPredictionScreen: React.FC = () => {
   };
 
   const validateForm = (): boolean => {
-    if (formData.N === null || formData.P === null || formData.K === null || formData.ph === null) {
-      Alert.alert('Error', 'Please fill all required fields (N, P, K, pH)');
+    // pH is mandatory
+    if (formData.ph === null) {
+      Alert.alert('pH Required', 'Please enter the pH value. This is a mandatory field for accurate crop prediction.');
       return false;
     }
     
-    if (formData.ph !== null && (formData.ph < 0 || formData.ph > 14)) {
-      Alert.alert('Error', 'pH must be between 0 and 14');
+    if (formData.ph < 0 || formData.ph > 14) {
+      Alert.alert('Invalid pH', 'pH must be between 0 and 14');
       return false;
     }
     
-    if (formData.N !== null && formData.N < 0) {
-      Alert.alert('Error', 'Nitrogen (N) cannot be negative');
+    // Show info if NPK values will use defaults
+    const missingParams = [];
+    if (formData.N === null) missingParams.push('Nitrogen (N)');
+    if (formData.P === null) missingParams.push('Phosphorus (P)');
+    if (formData.K === null) missingParams.push('Potassium (K)');
+    
+    if (missingParams.length > 0) {
+      Alert.alert(
+        'Using Default Values',
+        `${missingParams.join(', ')} not provided. Using average values (${MEAN_VALUES.N} kg/ha) for prediction.`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Continue', onPress: () => proceedWithSubmit() }
+        ]
+      );
       return false;
     }
     
@@ -195,43 +294,104 @@ const CropPredictionScreen: React.FC = () => {
 
   const getCropInfo = (cropName: string) => {
     const normalizedName = cropName.toLowerCase().trim();
-    return CROP_INFO[normalizedName] || CROP_INFO['default'];
+    const info = CROP_INFO[normalizedName];
+    
+    if (!info) {
+      console.warn(`No info found for crop: ${cropName}`);
+      // Return generic info but log warning
+      return {
+        description: `${cropName} is suitable for your soil and climate conditions. Consult local agricultural experts for detailed cultivation practices.`,
+        imageUrl: 'https://images.unsplash.com/photo-1625246333195-78d9c38ad449?w=400&h=300&fit=crop',
+        season: 'Varies',
+        water: 'Varies',
+        soil: 'Varies'
+      };
+    }
+    
+    return info;
+  };
+
+  const proceedWithSubmit = () => {
+    performAPICall();
   };
 
   const handleSubmit = async () => {
-    if (!validateForm()) return;
+    if (!validateForm()) {
+      // If validation passes (no missing NPK), proceed directly
+      if (formData.ph !== null && (formData.ph >= 0 && formData.ph <= 14)) {
+        await performAPICall();
+      }
+      return;
+    }
+    
+    await performAPICall();
+  };
 
+  const performAPICall = async () => {
+     console.log('========== STARTING API CALL ==========');
     setLoading(true);
     setSubmitted(true);
     setImageError(false);
 
     try {
-      // Replace with your FastAPI endpoint
-      const API_URL = 'http://YOUR_FASTAPI_SERVER:8000/predict';
+      // Use mean values for missing NPK parameters
+      const apiData = {
+        N: formData.N ?? MEAN_VALUES.N,
+        P: formData.P ?? MEAN_VALUES.P,
+        K: formData.K ?? MEAN_VALUES.K,
+        ph: formData.ph!,
+        temperature: formData.temperature,
+        humidity: formData.humidity,
+        rainfall: formData.rainfall
+      };
+  console.log('========== API DATA ==========');
+      console.log('N:', apiData.N);
+      console.log('P:', apiData.P);
+      console.log('K:', apiData.K);
+      console.log('pH:', apiData.ph);
+      console.log('Temperature:', apiData.temperature);
+      console.log('Humidity:', apiData.humidity);
+      console.log('Rainfall:', apiData.rainfall);
+
+      // Build the API URL with proper string concatenation
+      const API_URL = `http://localhost:8000/predict?ph=${apiData.ph}&n=${apiData.N}&p=${apiData.P}&k=${apiData.K}&temp=${apiData.temperature}&humidity=${apiData.humidity}&rainfall=${apiData.rainfall}`;
+      console.log('API Request URL:', API_URL);
+      console.log('API Request Data:', apiData);
+        console.log('========== API DATA ==========');
+      console.log('N:', apiData.N);
+      console.log('P:', apiData.P);
+      console.log('K:', apiData.K);
+      console.log('pH:', apiData.ph);
+      console.log('Temperature:', apiData.temperature);
+      console.log('Humidity:', apiData.humidity);
+      console.log('Rainfall:', apiData.rainfall);
+
       
-      const response = await fetch(API_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          N: formData.N,
-          P: formData.P,
-          K: formData.K,
-          ph: formData.ph,
-          temperature: formData.temperature,
-          humidity: formData.humidity,
-          rainfall: formData.rainfall
-        })
-      });
+      const response = await fetch(API_URL);
+
+      console.log('Response status:', response.status);
+      console.log('Response ok:', response.ok);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('API Error Response:', errorText);
+        throw new Error('API Error: ' + response.status + ' - ' + errorText);
+      }
 
       const result = await response.json();
+      console.log('API Response SUCCESS:', result);
+      console.log('Predicted crop:', result.predicted_crop);
       
-      // Expected API response format: { crop: "rice", confidence: 0.92 }
-      const cropInfo = getCropInfo(result.crop);
+      // Make sure we have the predicted_crop field
+      if (!result.predicted_crop) {
+        throw new Error('API response missing predicted_crop field');
+      }
+      
+      const cropInfo = getCropInfo(result.predicted_crop);
+      console.log('Crop info retrieved:', cropInfo);
       
       const newPrediction: CropPrediction = {
-        crop: result.crop,
+        crop: result.predicted_crop,
         confidence: result.confidence || 0.85,
         description: cropInfo.description,
         imageUrl: cropInfo.imageUrl,
@@ -239,49 +399,24 @@ const CropPredictionScreen: React.FC = () => {
         water_requirements: cropInfo.water,
         soil_type: cropInfo.soil,
         timestamp: Date.now(),
-        inputData: { ...formData }
+        inputData: { ...formData, ...apiData }
       };
 
+      console.log('Setting prediction:', newPrediction);
       setPrediction(newPrediction);
       await saveToHistory(newPrediction);
 
     } catch (error) {
-      console.error('API Error:', error);
+      console.error('API Error Details:', error);
       
-      // Fallback to mock prediction if API fails
       Alert.alert(
-        'API Connection Failed',
-        'Using demo prediction. Please ensure your FastAPI server is running.',
+        'Prediction Failed',
+        'Error: ' + (error instanceof Error ? error.message : 'Unknown error') + '. Please check your API server.',
         [{ text: 'OK' }]
       );
       
-      // Mock prediction logic
-      let selectedCrop = 'rice';
-      if (formData.ph && formData.ph > 7.5) {
-        selectedCrop = 'banana';
-      } else if (formData.temperature < 25) {
-        selectedCrop = 'wheat';
-      } else if (formData.rainfall > 2000) {
-        selectedCrop = 'rice';
-      } else {
-        selectedCrop = 'coconut';
-      }
-      
-      const cropInfo = getCropInfo(selectedCrop);
-      const mockPrediction: CropPrediction = {
-        crop: selectedCrop,
-        confidence: 0.85,
-        description: cropInfo.description,
-        imageUrl: cropInfo.imageUrl,
-        growing_season: cropInfo.season,
-        water_requirements: cropInfo.water,
-        soil_type: cropInfo.soil,
-        timestamp: Date.now(),
-        inputData: { ...formData }
-      };
-      
-      setPrediction(mockPrediction);
-      await saveToHistory(mockPrediction);
+      // Reset submitted state so user can try again
+      setSubmitted(false);
     } finally {
       setLoading(false);
     }
@@ -341,7 +476,7 @@ const CropPredictionScreen: React.FC = () => {
           {/* Header */}
           <View style={styles.header}>
             <TouchableOpacity 
-              onPress={() => navigation.goBack()}
+              onPress={() => router.back()}
               style={styles.backButton}
             >
               <ArrowLeft color="#4CAF50" size={24} />
@@ -357,7 +492,7 @@ const CropPredictionScreen: React.FC = () => {
 
           {/* Weather Summary */}
           <View style={styles.weatherSummary}>
-            <Text style={styles.weatherTitle}>Current Weather</Text>
+            <Text style={styles.weatherTitle}>Current Weather - {weatherData.district}</Text>
             <View style={styles.weatherRow}>
               <View style={styles.weatherItem}>
                 <Text style={styles.weatherValue}>{formData.temperature}°C</Text>
@@ -379,24 +514,36 @@ const CropPredictionScreen: React.FC = () => {
             <Text style={styles.formTitle}>Enter Soil Parameters</Text>
             
             {[
-              { key: 'N', label: 'Nitrogen (N) kg/ha', placeholder: 'e.g., 90' },
-              { key: 'P', label: 'Phosphorus (P) kg/ha', placeholder: 'e.g., 42' },
-              { key: 'K', label: 'Potassium (K) kg/ha', placeholder: 'e.g., 43' },
-              { key: 'ph', label: 'pH Level (0-14)', placeholder: 'e.g., 6.5' }
+              { key: 'N', label: 'Nitrogen (N) kg/ha (Optional)', placeholder: 'e.g., 90.5' },
+              { key: 'P', label: 'Phosphorus (P) kg/ha (Optional)', placeholder: 'e.g., 42.3' },
+              { key: 'K', label: 'Potassium (K) kg/ha (Optional)', placeholder: 'e.g., 43.7' },
+              { key: 'ph', label: 'pH Level (0-14) *Required', placeholder: 'e.g., 6.5' }
             ].map((param) => (
               <View key={param.key} style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>{param.label}</Text>
+                <Text style={[
+                  styles.inputLabel,
+                  param.key === 'ph' && styles.requiredLabel
+                ]}>
+                  {param.label}
+                </Text>
                 <TextInput
-                  style={styles.input}
+                  style={[
+                    styles.input,
+                    param.key === 'ph' && styles.requiredInput
+                  ]}
                   keyboardType="decimal-pad"
                   value={formData[param.key as keyof CropData]?.toString() || ''}
                   onChangeText={(value) => handleInputChange(param.key as keyof CropData, value)}
                   placeholder={param.placeholder}
                   editable={!submitted}
-                  maxLength={5}
+                  maxLength={10}
                 />
               </View>
             ))}
+
+            <Text style={styles.infoText}>
+              * pH is required. NPK values are optional - average values will be used if not provided.
+            </Text>
 
             {/* Buttons */}
             <View style={styles.buttonContainer}>
@@ -606,6 +753,10 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     fontWeight: '500',
   },
+  requiredLabel: {
+    color: '#D32F2F',
+    fontWeight: '600',
+  },
   input: {
     backgroundColor: '#F8F8F8',
     borderRadius: 8,
@@ -614,10 +765,21 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#E0E0E0',
   },
+  requiredInput: {
+    borderColor: '#FF9800',
+    borderWidth: 1.5,
+  },
+  infoText: {
+    fontSize: 12,
+    color: '#757575',
+    fontStyle: 'italic',
+    marginBottom: 10,
+    marginTop: 5,
+  },
   buttonContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginTop: 25,
+    marginTop: 15,
   },
   button: {
     flex: 1,
