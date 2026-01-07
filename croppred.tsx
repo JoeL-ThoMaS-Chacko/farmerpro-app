@@ -2,6 +2,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router, useLocalSearchParams } from 'expo-router';
 import { ArrowLeft, History, Trash2 } from 'lucide-react-native';
 import React, { useEffect, useState } from 'react';
+import { Swipeable } from 'react-native-gesture-handler';
+
 import {
   ActivityIndicator,
   Alert,
@@ -16,7 +18,6 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { GestureHandlerRootView, Swipeable } from 'react-native-gesture-handler';
 
 interface CropData {
   N: number | null;
@@ -28,23 +29,34 @@ interface CropData {
   rainfall: number;
 }
 
+interface TopPrediction {
+  rank: number;
+  crop: string;
+  probability: number;
+  confidence_percentage: number;
+}
+
 interface CropPrediction {
   crop: string;
-  confidence: number;
   description: string;
   imageUrl: string;
   growing_season: string;
   water_requirements: string;
   soil_type: string;
+  rank: number;
+}
+
+interface PredictionResult {
+  predictions: CropPrediction[];
   timestamp: number;
   inputData?: CropData;
 }
 
 // Mean values for NPK when user doesn't provide them
 const MEAN_VALUES = {
-  N: 100,  // Mean nitrogen value
-  P: 40,  // Mean phosphorus value
-  K: 50,  // Mean potassium value
+  N: 100,
+  P: 40,
+  K: 50,
 };
 
 // Crop information database
@@ -192,7 +204,6 @@ const CROP_INFO: { [key: string]: { description: string; imageUrl: string; seaso
 };
 
 const CropPredictionScreen: React.FC = () => {
-  // Get params using Expo Router's hook
   const params = useLocalSearchParams();
   
   const weatherData = {
@@ -212,11 +223,10 @@ const CropPredictionScreen: React.FC = () => {
     rainfall: weatherData.rainfall
   });
 
-  const [prediction, setPrediction] = useState<CropPrediction | null>(null);
+  const [predictionResult, setPredictionResult] = useState<PredictionResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
-  const [imageError, setImageError] = useState(false);
-  const [history, setHistory] = useState<CropPrediction[]>([]);
+  const [history, setHistory] = useState<PredictionResult[]>([]);
   const [showHistory, setShowHistory] = useState(false);
 
   useEffect(() => {
@@ -234,7 +244,7 @@ const CropPredictionScreen: React.FC = () => {
     }
   };
 
-  const saveToHistory = async (newPrediction: CropPrediction) => {
+  const saveToHistory = async (newPrediction: PredictionResult) => {
     try {
       const updatedHistory = [newPrediction, ...history];
       await AsyncStorage.setItem('cropPredictionHistory', JSON.stringify(updatedHistory));
@@ -260,7 +270,6 @@ const CropPredictionScreen: React.FC = () => {
   };
 
   const validateForm = (): boolean => {
-    // pH is mandatory
     if (formData.ph === null) {
       Alert.alert('pH Required', 'Please enter the pH value. This is a mandatory field for accurate crop prediction.');
       return false;
@@ -271,7 +280,6 @@ const CropPredictionScreen: React.FC = () => {
       return false;
     }
     
-    // Show info if NPK values will use defaults
     const missingParams = [];
     if (formData.N === null) missingParams.push('Nitrogen (N)');
     if (formData.P === null) missingParams.push('Phosphorus (P)');
@@ -280,7 +288,7 @@ const CropPredictionScreen: React.FC = () => {
     if (missingParams.length > 0) {
       Alert.alert(
         'Using Default Values',
-        `${missingParams.join(', ')} not provided. Using average values (${MEAN_VALUES.N} kg/ha) for prediction.`,
+        `${missingParams.join(', ')} not provided. Using average values for prediction.`,
         [
           { text: 'Cancel', style: 'cancel' },
           { text: 'Continue', onPress: () => proceedWithSubmit() }
@@ -298,7 +306,6 @@ const CropPredictionScreen: React.FC = () => {
     
     if (!info) {
       console.warn(`No info found for crop: ${cropName}`);
-      // Return generic info but log warning
       return {
         description: `${cropName} is suitable for your soil and climate conditions. Consult local agricultural experts for detailed cultivation practices.`,
         imageUrl: 'https://images.unsplash.com/photo-1625246333195-78d9c38ad449?w=400&h=300&fit=crop',
@@ -317,7 +324,6 @@ const CropPredictionScreen: React.FC = () => {
 
   const handleSubmit = async () => {
     if (!validateForm()) {
-      // If validation passes (no missing NPK), proceed directly
       if (formData.ph !== null && (formData.ph >= 0 && formData.ph <= 14)) {
         await performAPICall();
       }
@@ -328,13 +334,11 @@ const CropPredictionScreen: React.FC = () => {
   };
 
   const performAPICall = async () => {
-     console.log('========== STARTING API CALL ==========');
+    console.log('========== STARTING API CALL ==========');
     setLoading(true);
     setSubmitted(true);
-    setImageError(false);
 
     try {
-      // Use mean values for missing NPK parameters
       const apiData = {
         N: formData.N ?? MEAN_VALUES.N,
         P: formData.P ?? MEAN_VALUES.P,
@@ -344,34 +348,10 @@ const CropPredictionScreen: React.FC = () => {
         humidity: formData.humidity,
         rainfall: formData.rainfall
       };
-  console.log('========== API DATA ==========');
-      console.log('N:', apiData.N);
-      console.log('P:', apiData.P);
-      console.log('K:', apiData.K);
-      console.log('pH:', apiData.ph);
-      console.log('Temperature:', apiData.temperature);
-      console.log('Humidity:', apiData.humidity);
-      console.log('Rainfall:', apiData.rainfall);
 
-      // Build the API URL with proper string concatenation
       const API_URL = `http://localhost:8000/predict?ph=${apiData.ph}&n=${apiData.N}&p=${apiData.P}&k=${apiData.K}&temp=${apiData.temperature}&humidity=${apiData.humidity}&rainfall=${apiData.rainfall}`;
-      console.log('API Request URL:', API_URL);
-      console.log('API Request Data:', apiData);
-        console.log('========== API DATA ==========');
-      console.log('N:', apiData.N);
-      console.log('P:', apiData.P);
-      console.log('K:', apiData.K);
-      console.log('pH:', apiData.ph);
-      console.log('Temperature:', apiData.temperature);
-      console.log('Humidity:', apiData.humidity);
-      console.log('Rainfall:', apiData.rainfall);
-
       
       const response = await fetch(API_URL);
-
-      console.log('Response status:', response.status);
-      console.log('Response ok:', response.ok);
-
       if (!response.ok) {
         const errorText = await response.text();
         console.error('API Error Response:', errorText);
@@ -380,31 +360,34 @@ const CropPredictionScreen: React.FC = () => {
 
       const result = await response.json();
       console.log('API Response SUCCESS:', result);
-      console.log('Predicted crop:', result.predicted_crop);
       
-      // Make sure we have the predicted_crop field
-      if (!result.predicted_crop) {
-        throw new Error('API response missing predicted_crop field');
+      if (!result.top_predictions || !Array.isArray(result.top_predictions)) {
+        throw new Error('API response missing top_predictions field');
       }
       
-      const cropInfo = getCropInfo(result.predicted_crop);
-      console.log('Crop info retrieved:', cropInfo);
-      
-      const newPrediction: CropPrediction = {
-        crop: result.predicted_crop,
-        confidence: result.confidence || 0.85,
-        description: cropInfo.description,
-        imageUrl: cropInfo.imageUrl,
-        growing_season: cropInfo.season,
-        water_requirements: cropInfo.water,
-        soil_type: cropInfo.soil,
+      // Process top 3 predictions
+      const predictions: CropPrediction[] = result.top_predictions.map((pred: TopPrediction) => {
+        const cropInfo = getCropInfo(pred.crop);
+        return {
+          crop: pred.crop,
+          description: cropInfo.description,
+          imageUrl: cropInfo.imageUrl,
+          growing_season: cropInfo.season,
+          water_requirements: cropInfo.water,
+          soil_type: cropInfo.soil,
+          rank: pred.rank
+        };
+      });
+
+      const newPredictionResult: PredictionResult = {
+        predictions,
         timestamp: Date.now(),
         inputData: { ...formData, ...apiData }
       };
 
-      console.log('Setting prediction:', newPrediction);
-      setPrediction(newPrediction);
-      await saveToHistory(newPrediction);
+      console.log('Setting prediction result:', newPredictionResult);
+      setPredictionResult(newPredictionResult);
+      await saveToHistory(newPredictionResult);
 
     } catch (error) {
       console.error('API Error Details:', error);
@@ -415,7 +398,6 @@ const CropPredictionScreen: React.FC = () => {
         [{ text: 'OK' }]
       );
       
-      // Reset submitted state so user can try again
       setSubmitted(false);
     } finally {
       setLoading(false);
@@ -432,15 +414,15 @@ const CropPredictionScreen: React.FC = () => {
       humidity: weatherData.humidity,
       rainfall: weatherData.rainfall
     });
-    setPrediction(null);
+    setPredictionResult(null);
     setSubmitted(false);
   };
 
-  const loadHistoryItem = (item: CropPrediction) => {
+  const loadHistoryItem = (item: PredictionResult) => {
     if (item.inputData) {
       setFormData(item.inputData);
     }
-    setPrediction(item);
+    setPredictionResult(item);
     setSubmitted(true);
     setShowHistory(false);
   };
@@ -466,8 +448,25 @@ const CropPredictionScreen: React.FC = () => {
     );
   };
 
+  const getRankBadgeColor = (rank: number) => {
+    switch (rank) {
+      case 1: return '#FFD700'; // Gold
+      case 2: return '#C0C0C0'; // Silver
+      case 3: return '#CD7F32'; // Bronze
+      default: return '#4CAF50';
+    }
+  };
+
+  const getRankLabel = (rank: number) => {
+    switch (rank) {
+      case 1: return '🥇 Best Match';
+      case 2: return '🥈 2nd Best';
+      case 3: return '🥉 3rd Best';
+      default: return `#${rank}`;
+    }
+  };
+
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
       <KeyboardAvoidingView 
         style={styles.container}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -531,7 +530,7 @@ const CropPredictionScreen: React.FC = () => {
                     styles.input,
                     param.key === 'ph' && styles.requiredInput
                   ]}
-                  keyboardType="decimal-pad"
+                  keyboardType="numeric"
                   value={formData[param.key as keyof CropData]?.toString() || ''}
                   onChangeText={(value) => handleInputChange(param.key as keyof CropData, value)}
                   placeholder={param.placeholder}
@@ -570,44 +569,42 @@ const CropPredictionScreen: React.FC = () => {
             </View>
           </View>
 
-          {/* Results Section */}
-          {prediction && (
+          {/* Results Section - Show all 3 predictions */}
+          {predictionResult && (
             <View style={styles.resultContainer}>
-              <Text style={styles.resultTitle}>🌾 Recommended Crop</Text>
+              <Text style={styles.resultTitle}>🌾 Top 3 Recommended Crops</Text>
               
-              <View style={styles.cropCard}>
-                <Image 
-                  source={{ uri: prediction.imageUrl }}
-                  style={styles.cropImage}
-                  onError={() => setImageError(true)}
-                />
-                
-                <View style={styles.cropHeader}>
+              {predictionResult.predictions.map((prediction, index) => (
+                <View key={index} style={styles.cropCard}>
+                  <View style={[styles.rankBadge, {backgroundColor: getRankBadgeColor(prediction.rank)}]}>
+                    <Text style={styles.rankText}>{getRankLabel(prediction.rank)}</Text>
+                  </View>
+                  
+                  <Image 
+                    source={{ uri: prediction.imageUrl }}
+                    style={styles.cropImage}
+                  />
+                  
                   <Text style={styles.cropName}>{prediction.crop}</Text>
-                  <View style={styles.confidenceBadge}>
-                    <Text style={styles.confidenceText}>
-                      {(prediction.confidence * 100).toFixed(0)}% Match
-                    </Text>
+                  
+                  <Text style={styles.description}>{prediction.description}</Text>
+                  
+                  <View style={styles.cropDetails}>
+                    <View style={styles.detailRow}>
+                      <Text style={styles.detailLabel}>Growing Season:</Text>
+                      <Text style={styles.detailValue}>{prediction.growing_season}</Text>
+                    </View>
+                    <View style={styles.detailRow}>
+                      <Text style={styles.detailLabel}>Water Needs:</Text>
+                      <Text style={styles.detailValue}>{prediction.water_requirements}</Text>
+                    </View>
+                    <View style={styles.detailRow}>
+                      <Text style={styles.detailLabel}>Soil Type:</Text>
+                      <Text style={styles.detailValue}>{prediction.soil_type}</Text>
+                    </View>
                   </View>
                 </View>
-                
-                <Text style={styles.description}>{prediction.description}</Text>
-                
-                <View style={styles.cropDetails}>
-                  <View style={styles.detailRow}>
-                    <Text style={styles.detailLabel}>Growing Season:</Text>
-                    <Text style={styles.detailValue}>{prediction.growing_season}</Text>
-                  </View>
-                  <View style={styles.detailRow}>
-                    <Text style={styles.detailLabel}>Water Needs:</Text>
-                    <Text style={styles.detailValue}>{prediction.water_requirements}</Text>
-                  </View>
-                  <View style={styles.detailRow}>
-                    <Text style={styles.detailLabel}>Soil Type:</Text>
-                    <Text style={styles.detailValue}>{prediction.soil_type}</Text>
-                  </View>
-                </View>
-              </View>
+              ))}
             </View>
           )}
         </ScrollView>
@@ -642,14 +639,16 @@ const CropPredictionScreen: React.FC = () => {
                         onPress={() => loadHistoryItem(item)}
                       >
                         <View style={styles.historyItemContent}>
-                          <Text style={styles.historyItemCrop}>{item.crop}</Text>
+                          <Text style={styles.historyItemCrop}>
+                            {item.predictions?.length > 0
+                                ? item.predictions[0].crop
+                                : 'Unknown'}
+
+                          </Text>
                           <Text style={styles.historyItemDate}>
                             {new Date(item.timestamp).toLocaleDateString()}
                           </Text>
                         </View>
-                        <Text style={styles.historyItemConfidence}>
-                          {(item.confidence * 100).toFixed(0)}%
-                        </Text>
                       </TouchableOpacity>
                     </Swipeable>
                   ))
@@ -659,7 +658,6 @@ const CropPredictionScreen: React.FC = () => {
           </View>
         </Modal>
       </KeyboardAvoidingView>
-    </GestureHandlerRootView>
   );
 };
 
@@ -819,11 +817,24 @@ const styles = StyleSheet.create({
     backgroundColor: 'white',
     borderRadius: 12,
     padding: 20,
+    marginBottom: 16,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 2,
+  },
+  rankBadge: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    alignSelf: 'flex-start',
+    marginBottom: 12,
+  },
+  rankText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: 'bold',
   },
   cropImage: {
     width: '100%',
@@ -832,28 +843,12 @@ const styles = StyleSheet.create({
     marginBottom: 15,
     backgroundColor: '#F0F0F0',
   },
-  cropHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
   cropName: {
     fontSize: 24,
     fontWeight: 'bold',
     color: '#333',
     textTransform: 'capitalize',
-  },
-  confidenceBadge: {
-    backgroundColor: '#E8F5E9',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-  },
-  confidenceText: {
-    color: '#2E7D32',
-    fontSize: 14,
-    fontWeight: '600',
+    marginBottom: 10,
   },
   description: {
     fontSize: 16,
@@ -880,6 +875,8 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#333',
     fontWeight: '600',
+    flex: 1,
+    textAlign: 'right',
   },
   modalContainer: {
     flex: 1,
@@ -944,11 +941,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#999',
     marginTop: 4,
-  },
-  historyItemConfidence: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#4CAF50',
   },
   deleteButton: {
     backgroundColor: '#F44336',
