@@ -1,41 +1,3 @@
-/**
- * community.tsx
- *
- * Full community feed with Firestore backend.
- * Features:
- *   - View all posts (text + optional photo/video)
- *   - Create post with title, description, photo or video picker
- *   - Like / Dislike (one reaction per user per post, togglable)
- *   - Comments with real-time listener
- *   - All data lives in Firestore; new reactions update instantly
- *
- * Firestore structure:
- *   posts/{postId}
- *     authorId: string
- *     authorName: string
- *     title: string
- *     description: string
- *     mediaUrl: string | null        // download URL from Storage
- *     mediaType: "image"|"video"|null
- *     likeCount: number
- *     dislikeCount: number
- *     likedBy: string[]              // userIds
- *     dislikedBy: string[]           // userIds
- *     commentCount: number
- *     createdAt: Timestamp
- *
- *   posts/{postId}/comments/{commentId}
- *     authorId: string
- *     authorName: string
- *     text: string
- *     createdAt: Timestamp
- *
- * TO WIRE UP FIREBASE:
- *   1. npm install firebase  (or: npx expo install firebase)
- *   2. Create app/firebaseConfig.ts with your config
- *   3. Replace every FIREBASE_STUB comment block below with the real calls
- */
-
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as ImagePicker from "expo-image-picker";
 import { router } from "expo-router";
@@ -83,26 +45,14 @@ import {
 export { fetchUserPosts };
 export type { Comment, Post };
 
-// ─────────────────────────────────────────────────────────────────────────────
-// FIREBASE STUB LAYER
-// Replace every function body here with real Firestore calls when ready.
-// The rest of the component never needs to change.
-// ─────────────────────────────────────────────────────────────────────────────
 
 let _stubPosts: Post[] = [];
 let _stubComments: { [postId: string]: Comment[] } = {};
 
 async function fetchPosts(): Promise<Post[]> {
-  // FIREBASE_STUB — replace with:
-  // const snap = await getDocs(query(collection(db, "posts"), orderBy("createdAt","desc")));
-  // return snap.docs.map(d => ({ id: d.id, ...d.data() } as Post));
   return [..._stubPosts].sort((a, b) => b.createdAt - a.createdAt);
 }
-
 async function createPost(post: Omit<Post, "id">): Promise<string> {
-  // FIREBASE_STUB — replace with:
-  // const ref = await addDoc(collection(db, "posts"), { ...post, createdAt: serverTimestamp() });
-  // return ref.id;
   const id = `post_${Date.now()}`;
   _stubPosts.unshift({ ...post, id });
   return id;
@@ -112,12 +62,7 @@ async function uploadMedia(
   _uri: string,
   _type: "image" | "video",
 ): Promise<string> {
-  // FIREBASE_STUB — replace with Firebase Storage upload:
-  // const ref = storageRef(storage, `posts/${Date.now()}`);
-  // const blob = await (await fetch(_uri)).blob();
-  // await uploadBytes(ref, blob);
-  // return await getDownloadURL(ref);
-  return _uri; // stub: just return local uri
+  return _uri; 
 }
 
 async function toggleReaction(
@@ -125,9 +70,6 @@ async function toggleReaction(
   userId: string,
   reaction: "like" | "dislike",
 ): Promise<void> {
-  // FIREBASE_STUB — replace with a Firestore transaction:
-  // const postRef = doc(db, "posts", postId);
-  // await runTransaction(db, async tx => { ... update likedBy/dislikedBy/counts ... });
   const post = _stubPosts.find((p) => p.id === postId);
   if (!post) return;
   const other = reaction === "like" ? "dislike" : "like";
@@ -153,9 +95,6 @@ async function toggleReaction(
 }
 
 async function fetchComments(postId: string): Promise<Comment[]> {
-  // FIREBASE_STUB — replace with:
-  // const snap = await getDocs(query(collection(db,"posts",postId,"comments"), orderBy("createdAt","asc")));
-  // return snap.docs.map(d => ({ id: d.id, ...d.data() } as Comment));
   return (_stubComments[postId] || []).sort(
     (a, b) => a.createdAt - b.createdAt,
   );
@@ -165,20 +104,11 @@ async function addComment(
   postId: string,
   comment: Omit<Comment, "id">,
 ): Promise<void> {
-  // FIREBASE_STUB — replace with:
-  // await addDoc(collection(db,"posts",postId,"comments"), { ...comment, createdAt: serverTimestamp() });
-  // await updateDoc(doc(db,"posts",postId), { commentCount: increment(1) });
-  const id = `cmt_${Date.now()}`;
   if (!_stubComments[postId]) _stubComments[postId] = [];
   _stubComments[postId].push({ ...comment, id });
   const post = _stubPosts.find((p) => p.id === postId);
   if (post) post.commentCount = (_stubComments[postId] || []).length;
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// HELPERS
-// ─────────────────────────────────────────────────────────────────────────────
-
 function timeAgo(ms: number): string {
   const diff = Date.now() - ms;
   const m = Math.floor(diff / 60000);
@@ -204,11 +134,6 @@ function initials(name: string): string {
 const GREEN = "#4CAF50";
 const GREEN_DARK = "#388E3C";
 const GREEN_BG = "#F0FFF0";
-
-// ─────────────────────────────────────────────────────────────────────────────
-// COMMENT SHEET  (shown as bottom modal)
-// ─────────────────────────────────────────────────────────────────────────────
-
 function CommentSheet({
   postId,
   visible,
@@ -421,10 +346,6 @@ const cs = StyleSheet.create({
   sendBtnDisabled: { opacity: 0.4 },
 });
 
-// ─────────────────────────────────────────────────────────────────────────────
-// POST CARD
-// ─────────────────────────────────────────────────────────────────────────────
-
 function PostCard({
   post,
   currentUserId,
@@ -617,10 +538,6 @@ const pc = StyleSheet.create({
   },
   reactionCount: { fontSize: 13, fontWeight: "600", color: "#888" },
 });
-
-// ─────────────────────────────────────────────────────────────────────────────
-// CREATE POST MODAL
-// ─────────────────────────────────────────────────────────────────────────────
 
 function CreatePostModal({
   visible,
@@ -942,10 +859,6 @@ const cpm = StyleSheet.create({
   submitBtnText: { color: "white", fontSize: 16, fontWeight: "700" },
 });
 
-// ─────────────────────────────────────────────────────────────────────────────
-// MAIN COMMUNITY SCREEN
-// ─────────────────────────────────────────────────────────────────────────────
-
 export default function CommunityScreen() {
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
@@ -966,7 +879,6 @@ export default function CommunityScreen() {
       if (raw) {
         const u = JSON.parse(raw);
         if (u.name) setCurrentUserName(u.name);
-        // Use email as a stable userId stub (replace with Firebase uid in production)
         if (u.email) setCurrentUserId(u.email);
       }
     } catch (_) {}
@@ -987,7 +899,6 @@ export default function CommunityScreen() {
   };
 
   const handleReact = async (postId: string, reaction: "like" | "dislike") => {
-    // Optimistic update
     await toggleReaction(postId, currentUserId, reaction);
     const updated = await fetchPosts();
     setPosts(updated);
