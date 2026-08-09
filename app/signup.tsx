@@ -1,13 +1,3 @@
-/**
- * signuppg.tsx
- *
- * On successful signup:
- *   1. Check if email already exists in users collection -> show error
- *   2. Create Firestore doc at users/{auto-id}:
- *        { name, email, password, provider: "email", createdAt }
- *   3. Save to AsyncStorage -> navigate home
- */
-
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
@@ -39,11 +29,6 @@ import {
   where,
 } from "firebase/firestore";
 import { db } from "../src/config/firebase";
-
-// -----------------------------------------------------------------------------
-// Helpers
-// -----------------------------------------------------------------------------
-
 const showAlert = (title: string, message: string) => {
   if (Platform.OS === "web") {
     window.alert(`${title}\n\n${message}`);
@@ -62,43 +47,28 @@ const getStrength = (pwd: string): Strength => {
     return { label: "Fair", color: "#FFB74D", fraction: 0.66 };
   return { label: "Strong", color: "#4CAF50", fraction: 1 };
 };
-
-// -----------------------------------------------------------------------------
-// Firestore signup
-// -----------------------------------------------------------------------------
-
 async function registerUser(
   name: string,
   email: string,
   password: string,
 ): Promise<string> {
   const normalizedEmail = email.trim().toLowerCase();
-
-  // 1. Check for existing account with same email
   const existing = await getDocs(
     query(collection(db, "users"), where("email", "==", normalizedEmail)),
   );
   if (!existing.empty) {
     throw { code: "EMAIL_EXISTS" };
   }
-
-  // 2. Create the user document
-  //    Firestore auto-generates the doc ID (acts as userId)
   const docRef = await addDoc(collection(db, "users"), {
     name: name.trim(),
     email: normalizedEmail,
-    password: password, // store as-is per spec; add hashing when ready
+    password: password, 
     provider: "email",
     createdAt: serverTimestamp(),
   });
 
-  return docRef.id; // the generated userId
+  return docRef.id; 
 }
-
-// -----------------------------------------------------------------------------
-// Screen
-// -----------------------------------------------------------------------------
-
 export default function SignupScreen() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -140,9 +110,6 @@ export default function SignupScreen() {
       useNativeDriver: false,
     }).start();
   }, [password]);
-
-  // -- Submit ----------------------------------------------------------------
-
   const handleSignup = async () => {
     if (!name.trim()) {
       showAlert("Missing Name", "Please enter your full name.");
@@ -165,7 +132,7 @@ export default function SignupScreen() {
     try {
       const userId = await registerUser(name, email, password);
 
-      // Persist login state
+    
       await AsyncStorage.setItem("userLoggedIn", "true");
       await AsyncStorage.setItem(
         "userData",
@@ -176,8 +143,6 @@ export default function SignupScreen() {
           provider: "email",
         }),
       );
-
-      // Navigate straight to home - no blocking Alert
       router.replace("/");
     } catch (e: any) {
       if (e?.code === "EMAIL_EXISTS") {
@@ -195,8 +160,6 @@ export default function SignupScreen() {
       setLoading(false);
     }
   };
-
-  // -- Render ----------------------------------------------------------------
 
   return (
     <SafeAreaView style={s.safe}>
@@ -399,10 +362,6 @@ export default function SignupScreen() {
     </SafeAreaView>
   );
 }
-
-// -----------------------------------------------------------------------------
-// Styles
-// -----------------------------------------------------------------------------
 
 const GREEN = "#4CAF50";
 const GREEN_DARK = "#388E3C";
