@@ -1,5 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import * as Location from "expo-location"; // ← replaces @react-native-community/geolocation
+import * as Location from "expo-location";
 import { router } from "expo-router";
 import { Edit3, FileText, Home, Leaf, MapPin, User } from "lucide-react-native";
 import React, { useEffect, useRef, useState } from "react";
