@@ -51,15 +51,11 @@ interface PredictionResult {
   timestamp: number;
   inputData?: CropData;
 }
-
-// Mean values for NPK when user doesn't provide them
 const MEAN_VALUES = {
   N: 100,
   P: 40,
   K: 50,
 };
-
-// Crop information database
 const CROP_INFO: {
   [key: string]: {
     description: string;
@@ -514,11 +510,11 @@ const CropPredictionScreen: React.FC = () => {
   const getRankBadgeColor = (rank: number) => {
     switch (rank) {
       case 1:
-        return "#FFD700"; // Gold
+        return "#FFD700";
       case 2:
-        return "#C0C0C0"; // Silver
+        return "#C0C0C0"; 
       case 3:
-        return "#CD7F32"; // Bronze
+        return "#CD7F32";
       default:
         return "#4CAF50";
     }
